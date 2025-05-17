@@ -1,0 +1,5 @@
+.idea/
+.venv/
+__pycache__/
+keys-and-iv.txt
+*.pyc
