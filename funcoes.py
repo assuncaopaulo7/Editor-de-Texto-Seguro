@@ -1,60 +1,61 @@
-import os
-import subprocess
+# funcoes.py
 
-def listar_ficheiros():
-    print("\nFicheiros disponíveis:")
-    for f in os.listdir('.'):
-        if os.path.isfile(f):
-            print(f)
+import base64
+import json
+from Crypto.Cipher import AES
+from Crypto.Hash import HMAC, SHA256
+from Crypto.Random import get_random_bytes
+from Crypto.Util.Padding import pad
 
-def criar_ficheiro(nome):
-    with open(nome, 'w') as f:
-        f.write('')
-    print(f"Ficheiro '{nome}' criado.")
+def gerar_chaves_e_guardar():
+    chave = get_random_bytes(32)       # AES-256
+    iv = get_random_bytes(16)          # IV para AES-CBC
+    chave_mac = get_random_bytes(32)   # Chave para HMAC-SHA256
 
-def editar_ficheiro(nome):
-    if os.path.exists(nome):
-        subprocess.call(['nano', nome])
-    else:
-        print(f"O ficheiro '{nome}' não existe.")
+    with open("keys-and-iv.txt", "w") as f:
+        json.dump({
+            "key_cipher": base64.b64encode(chave).decode(),
+            "iv": base64.b64encode(iv).decode(),
+            "key_mac": base64.b64encode(chave_mac).decode()
+        }, f)
 
-def ler_ficheiro(nome):
-    if os.path.exists(nome):
-        print(f"\nConteúdo de '{nome}':\n")
-        with open(nome, 'r') as f:
-            conteudo = f.read()
-            print(conteudo)
-    else:
-        print(f"O ficheiro '{nome}' não existe.")
+    print("Chaves guardadas em 'keys-and-iv.txt'")
+    return chave, iv, chave_mac
 
-def menu():
-    while True:
-        print("\n------ Menu ------")
-        print("1. Listar ficheiros")
-        print("2. Criar ficheiro")
-        print("3. Editar ficheiro")
-        print("4. Ler ficheiro")
-        print("5. Sair")
-        print("------------------\n")
-        
+def cifrar_ficheiro(nome_original, nome_saida):
+    try:
+        chave, iv, _ = gerar_chaves_e_guardar()
 
-        escolha = input("Escolha uma opção: ")
+        with open(nome_original, 'r') as f:
+            texto = f.read()
 
-        if escolha == '1':
-            listar_ficheiros()
-        elif escolha == '2':
-            nome = input("Nome do ficheiro: ")
-            criar_ficheiro(nome)
-        elif escolha == '3':
-            nome = input("Nome do ficheiro a editar: ")
-            editar_ficheiro(nome)
-        elif escolha == '4':
-            nome = input("Nome do ficheiro a ler: ")
-            ler_ficheiro(nome)
-        elif escolha == '5':
-            break
-        else:
-            print("Opção inválida.")
+        cifra = AES.new(chave, AES.MODE_CBC, iv)
+        cifrado = cifra.encrypt(pad(texto.encode(), AES.block_size))
+        cifrado_b64 = base64.b64encode(cifrado).decode()
 
-if __name__ == "__main__":
-    menu()
+        with open(nome_saida, 'w') as f:
+            f.write(cifrado_b64)
+
+        print(f"Ficheiro cifrado guardado como '{nome_saida}'")
+        print("Apague o ficheiro 'keys-and-iv.txt' após uso!")
+    except Exception as e:
+        print(f"Erro ao cifrar ficheiro: {e}")
+
+def autenticar_ficheiro(nome_original, nome_saida):
+    try:
+        _, _, chave_mac = gerar_chaves_e_guardar()
+
+        with open(nome_original, 'r') as f:
+            texto = f.read()
+
+        hmac = HMAC.new(chave_mac, digestmod=SHA256)
+        hmac.update(texto.encode())
+        mac = hmac.hexdigest()
+
+        with open(nome_saida, 'w') as f:
+            f.write(texto + "\n\n[MAC] " + mac)
+
+        print(f"Ficheiro autenticado guardado como '{nome_saida}'")
+        print("Apague o ficheiro 'keys-and-iv.txt' após uso!")
+    except Exception as e:
+        print(f"Erro ao autenticar ficheiro: {e}")
