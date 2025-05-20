@@ -59,3 +59,40 @@ def autenticar_ficheiro(nome_original, nome_saida):
         print("Apague o ficheiro 'keys-and-iv.txt' após uso!")
     except Exception as e:
         print(f"Erro ao autenticar ficheiro: {e}")
+
+#funçao p autenticar MAC
+def verificar_mac(nome_ficheiro, chave_mac):
+    try:
+        with open(nome_ficheiro, 'r') as f:
+            conteudo = f.read().split('\n\n[MAC] ')
+
+            if len(conteudo) != 2:
+                return False, "Formato invalido, MAC nao encontrado"
+
+            texto, mac_armazenado = conteudo
+            hmac = HMAC.new(chave_mac, digestmod=SHA256)
+            hmac.update(texto.encode())
+            mac_calculado = hmac.hexdigest()
+
+            if mac_armazenado.strip() ==  mac_calculado:
+                return True, "MAC valido, integridade confirmada"
+            else:
+                return False, "MAC invalido. Ficheiro pode ter sido alterado"
+
+    except Exception as e:
+        return False, f"Erro na verificaçao {e}"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

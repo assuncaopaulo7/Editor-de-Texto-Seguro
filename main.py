@@ -1,5 +1,7 @@
 # main.py
 
+import base64
+import json
 import os
 import subprocess
 from funcoes import cifrar_ficheiro, autenticar_ficheiro
@@ -24,15 +26,34 @@ def editar_ficheiro(nome):
     else:
         print(f"O ficheiro '{nome}' não existe.")
 
-
+#mudada a funçao para verificar se o MAC foi autenticado
 def ler_ficheiro(nome):
     if os.path.exists(nome):
-        print(f"\nConteúdo de '{nome}':\n")
+        print(f"\nConteudo de '{nome}': \n")
+
         with open(nome, 'r') as f:
             conteudo = f.read()
-            print(conteudo)
-    else:
-        print(f"O ficheiro '{nome}' não existe.")
+
+            if "[MAC]" in conteudo:
+                if not os.path.exists("keys-and-iv.txt"):
+                    print("Ficheiro autenticado mas 'keys-and-iv.txt' nao encontrado")
+
+                    return
+                
+                with open("keys-and-iv.txt", 'r') as key_file:
+                    keys = json.load(key_file)
+                    chave_mac = base64.b64decode(keys["key_mac"])
+
+                valido, mensagem = verificar_mac(nome, chave_mac)
+                print(f"verificaçao MAC: {mensagem}")
+
+                if not valido: 
+                    return
+                
+            print(conteudo.split('\n\n[MAC] ')[0])
+
+    else: 
+        print(f"o ficheiro '{nome}' nao existe.")
 
 
 def menu():
