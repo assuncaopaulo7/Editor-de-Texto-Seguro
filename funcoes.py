@@ -2,10 +2,81 @@
 
 import base64
 import json
+
 from Crypto.Cipher import AES
 from Crypto.Hash import HMAC, SHA256
 from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad
+from Crypto.PublicKey import RSA
+from Crypto.Signature import pkcs1_15
+
+
+#-------------// Gerar Chaves e Assinatura Digital //--------------
+def gerar_chaves_rsa():
+    #gera par de chaves rsa e dá save p ficheiro
+    key = RSA.generate(2048)
+    private_key = key.export_key()
+    public_key = key.publicKey().export_key()
+
+    with open("private_key.pem", "wb") as f:
+        f.write(private_key)
+    
+    with open("public_key.pem", "wb") as f :
+        f.write(public_key)
+
+    print("chaves rsa geradas: private_key.pem e public_key.pem")
+
+    return private_key, public_key
+
+def assinar_ficheiro(nome_ficheiro, private_key_path="private_key.pem"):
+    try:
+        with open(private_key_path, "rb") as f:
+            private_key = RSA.import_key(f.read())
+
+        with open(nome_ficheiro, "rb") as f:
+            conteudo = f.read()
+
+
+        hash_obj = SHA256.new(conteudo)
+        signature = pkcs1_15.new(private_key).sign(hash_obj)
+
+        with open(f"{nome_ficheiro}.sig", "wb") as f :
+            f.write(signature)
+
+        print(f"assinatura guardada em {nome_ficheiro}.sig")
+        return signature
+    
+    except Exception as e:
+        print(f"erro ao assinar ficheiro: {e}")
+        return None 
+    
+
+def verificar_assinatura(nome_ficheiro, signature_path, public_key_path="public_key.pem"):
+    try:
+        with open(public_key_path, "rb") as f:
+            public_key = RSA.import_key(f.read())
+        
+        with open(nome_ficheiro, "rb") as f:
+            conteudo = f.read()
+        
+        with open(signature_path, "rb") as f:
+            signature = f.read()
+        
+        hash_obj = SHA256.new(conteudo)
+        pkcs1_15.new(public_key).verify(hash_obj, signature)
+        
+        print("Assinatura válida. Ficheiro não foi alterado.")
+        return True
+    
+    except (ValueError, TypeError) as e:
+        print(f"Assinatura inválida: {e}")
+        return False
+    
+    except Exception as e:
+        print(f"Erro na verificação: {e}")
+        return False
+#---------------------------//-------------------------------------
+
 
 def gerar_chaves_e_guardar():
     chave = get_random_bytes(32)       # AES-256
