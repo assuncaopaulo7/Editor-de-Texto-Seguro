@@ -2,6 +2,7 @@
 
 import base64
 import json
+import shutil
 
 from Crypto.Cipher import AES
 from Crypto.Hash import HMAC, SHA256
@@ -152,6 +153,37 @@ def verificar_mac(nome_ficheiro, chave_mac):
 
     except Exception as e:
         return False, f"Erro na verificaçao {e}"
+    
+#funçao para carregar chave MAC do ficheiro
+def carregar_chave_mac():
+    try:
+        with open("keys-and-iv.txt", "r") as f:
+            dados = json.load(f)
+            chave_mac = base64.b64decode(dados["key_mac"])
+            return chave_mac
+    except Exception as e:
+        print(f"Erro ao carregar chave MAC: {e}")
+        return None
+
+#funçao para guardar o ficheiro autenticado
+def guardar_se_autenticado(nome_entrada, nome_saida):
+    chave_mac = carregar_chave_mac()
+    if chave_mac is None:
+        print("Chave MAC não encontrada.")
+        return
+
+    valido, mensagem = verificar_mac(nome_entrada, chave_mac)
+    print(mensagem)
+
+    if valido:
+        try:
+            shutil.copyfile(nome_entrada, nome_saida)
+            print("Ficheiro autenticado e guardado como '{nome_saida}'")
+        except Exception as e:
+            print(f"Erro ao guardar ficheiro: {e}")
+    else:
+        print("Ficheiro NÃO autenticado. Guardar não é permitido.")
+
 
 
 

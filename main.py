@@ -4,7 +4,7 @@ import base64
 import json
 import os
 import subprocess
-from funcoes import cifrar_ficheiro, autenticar_ficheiro, assinar_ficheiro, verificar_assinatura, gerar_chaves_rsa
+from funcoes import cifrar_ficheiro, autenticar_ficheiro, assinar_ficheiro, verificar_assinatura, gerar_chaves_rsa, guardar_se_autenticado
 
 
 def listar_ficheiros():
@@ -66,10 +66,11 @@ def menu():
         print("4. Ler ficheiro")
         print("5. Cifrar ficheiro")
         print("6. Autenticar ficheiro")
-        print("7. Gerar chaves RSA")
-        print("8. Assinar ficheiro")
-        print("9. Verificar assinatura")
-        print("10. Sair")
+        print("7. Guardar ficheiro autenticado")
+        print("8. Gerar chaves RSA")
+        print("9. Assinar ficheiro")
+        print("10. Verificar assinatura")
+        print("11. Sair")
         print("------------------\n")
 
         escolha = input("Escolha uma opção: ")
@@ -94,15 +95,20 @@ def menu():
             saida = input("Nome do ficheiro de saída (autenticado): ")
             autenticar_ficheiro(nome, saida)
         elif escolha == '7':
-            gerar_chaves_rsa()
+            print("Guardar ficheiro apenas se o ficheiro for autenticado.")
+            ficheiro_autenticado = input("Nome do ficheiro autenticado: ")    
+            ficheiro_saida = input("Nome do ficheiro de saída: ")
+            guardar_se_autenticado(ficheiro_autenticado, ficheiro_saida)
         elif escolha == '8':
+            gerar_chaves_rsa()
+        elif escolha == '9':
             nome = input("Nome do ficheiro a assinar: ")
             assinar_ficheiro(nome)
-        elif escolha == '9':
+        elif escolha == '10':
             nome = input("Nome do ficheiro original: ")
             assinatura = input("Nome do ficheiro de assinatura (.sig): ")
             verificar_assinatura(nome, assinatura)
-        elif escolha == '10':
+        elif escolha == '11':
             break
         else:
             print("Opção inválida.")
