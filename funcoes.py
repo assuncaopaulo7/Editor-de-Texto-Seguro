@@ -1,201 +1,153 @@
-# funcoes.py
-
-import base64
+import os
 import json
+import base64
 import shutil
-
 from Crypto.Cipher import AES
 from Crypto.Hash import HMAC, SHA256
 from Crypto.Random import get_random_bytes
-from Crypto.Util.Padding import pad
+from Crypto.Util.Padding import pad, unpad
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 
-
-#-------------// Gerar Chaves e Assinatura Digital //--------------
 def gerar_chaves_rsa():
-    #gera par de chaves rsa e dá save p ficheiro
     key = RSA.generate(2048)
-    private_key = key.export_key()
-    public_key = key.publicKey().export_key()
-
+    priv = key.export_key()
+    pub = key.publickey().export_key()
     with open("private_key.pem", "wb") as f:
-        f.write(private_key)
-    
-    with open("public_key.pem", "wb") as f :
-        f.write(public_key)
-
-    print("chaves rsa geradas: private_key.pem e public_key.pem")
-
-    return private_key, public_key
+        f.write(priv)
+    with open("public_key.pem", "wb") as f:
+        f.write(pub)
+    print("Chaves RSA geradas: private_key.pem, public_key.pem")
+    return priv, pub
 
 def assinar_ficheiro(nome_ficheiro, private_key_path="private_key.pem"):
     try:
         with open(private_key_path, "rb") as f:
-            private_key = RSA.import_key(f.read())
-
+            priv = RSA.import_key(f.read())
         with open(nome_ficheiro, "rb") as f:
-            conteudo = f.read()
-
-
-        hash_obj = SHA256.new(conteudo)
-        signature = pkcs1_15.new(private_key).sign(hash_obj)
-
-        with open(f"{nome_ficheiro}.sig", "wb") as f :
-            f.write(signature)
-
-        print(f"assinatura guardada em {nome_ficheiro}.sig")
-        return signature
-    
+            data = f.read()
+        h = SHA256.new(data)
+        sig = pkcs1_15.new(priv).sign(h)
+        path = nome_ficheiro + ".sig"
+        with open(path, "wb") as f:
+            f.write(sig)
+        print(f"Assinatura guardada em '{path}'")
+        return sig
     except Exception as e:
-        print(f"erro ao assinar ficheiro: {e}")
-        return None 
-    
+        print("Erro ao assinar:", e)
+        return None
 
 def verificar_assinatura(nome_ficheiro, signature_path, public_key_path="public_key.pem"):
     try:
         with open(public_key_path, "rb") as f:
-            public_key = RSA.import_key(f.read())
-        
+            pub = RSA.import_key(f.read())
         with open(nome_ficheiro, "rb") as f:
-            conteudo = f.read()
-        
+            data = f.read()
         with open(signature_path, "rb") as f:
-            signature = f.read()
-        
-        hash_obj = SHA256.new(conteudo)
-        pkcs1_15.new(public_key).verify(hash_obj, signature)
-        
-        print("Assinatura válida. Ficheiro não foi alterado.")
+            sig = f.read()
+        h = SHA256.new(data)
+        pkcs1_15.new(pub).verify(h, sig)
+        print("Assinatura válida.")
         return True
-    
     except (ValueError, TypeError) as e:
-        print(f"Assinatura inválida: {e}")
+        print("Assinatura inválida:", e)
         return False
-    
     except Exception as e:
-        print(f"Erro na verificação: {e}")
+        print("Erro na verificação:", e)
         return False
-#---------------------------//-------------------------------------
 
+def gerar_chaves_por_ficheiro(nome_saida):
+    chave = get_random_bytes(32)  # AES-256
+    iv = get_random_bytes(16)     # IV CBC
+    chave_mac = get_random_bytes(32)  # HMAC-SHA256
 
-def gerar_chaves_e_guardar():
-    chave = get_random_bytes(32)       # AES-256
-    iv = get_random_bytes(16)          # IV para AES-CBC
-    chave_mac = get_random_bytes(32)   # Chave para HMAC-SHA256
+    key_data = {
+        "key_cipher": base64.b64encode(chave).decode(),
+        "iv": base64.b64encode(iv).decode(),
+        "key_mac": base64.b64encode(chave_mac).decode()
+    }
+    key_file = f"{nome_saida}.key.txt"
+    with open(key_file, "w") as f:
+        json.dump(key_data, f, indent=4)
+    print(f"Chaves guardadas em '{key_file}' — apague-o após uso!")
+    return chave, iv, chave_mac
 
-    with open("keys-and-iv.txt", "w") as f:
-        json.dump({
-            "key_cipher": base64.b64encode(chave).decode(),
-            "iv": base64.b64encode(iv).decode(),
-            "key_mac": base64.b64encode(chave_mac).decode()
-        }, f)
-
-    print("Chaves guardadas em 'keys-and-iv.txt'")
+def ler_chaves_de_ficheiro(key_file):
+    if not os.path.exists(key_file):
+        raise FileNotFoundError(f"Ficheiro de chaves '{key_file}' não encontrado.")
+    with open(key_file, "r") as f:
+        data = json.load(f)
+    try:
+        chave = base64.b64decode(data["key_cipher"])
+        iv = base64.b64decode(data["iv"])
+        chave_mac = base64.b64decode(data["key_mac"])
+    except KeyError as e:
+        raise KeyError(f"Campo de chave em falta no ficheiro: {e}")
     return chave, iv, chave_mac
 
 def cifrar_ficheiro(nome_original, nome_saida):
     try:
-        chave, iv, _ = gerar_chaves_e_guardar()
-
-        with open(nome_original, 'r') as f:
-            texto = f.read()
-
-        cifra = AES.new(chave, AES.MODE_CBC, iv)
-        cifrado = cifra.encrypt(pad(texto.encode(), AES.block_size))
-        cifrado_b64 = base64.b64encode(cifrado).decode()
-
-        with open(nome_saida, 'w') as f:
-            f.write(cifrado_b64)
-
-        print(f"Ficheiro cifrado guardado como '{nome_saida}'")
-        print("Apague o ficheiro 'keys-and-iv.txt' após uso!")
+        chave, iv, _ = gerar_chaves_por_ficheiro(nome_saida)
+        with open(nome_original, "rb") as f:
+            pt = f.read()
+        cipher = AES.new(chave, AES.MODE_CBC, iv)
+        ct = cipher.encrypt(pad(pt, AES.block_size))
+        with open(nome_saida, "wb") as f:
+            f.write(ct)
+        print(f"'{nome_saida}' cifrado com sucesso. Chaves em '{nome_saida}.key.txt' — apague-as após uso!")
     except Exception as e:
-        print(f"Erro ao cifrar ficheiro: {e}")
+        print("Erro ao cifrar:", e)
+
+def decifrar_ficheiro(nome_cifrado, nome_saida):
+    try:
+        key_file = f"{nome_cifrado}.key.txt"
+        chave, iv, _ = ler_chaves_de_ficheiro(key_file)
+        with open(nome_cifrado, "rb") as f:
+            ct = f.read()
+        cipher = AES.new(chave, AES.MODE_CBC, iv)
+        pt = unpad(cipher.decrypt(ct), AES.block_size)
+        with open(nome_saida, "wb") as f:
+            f.write(pt)
+        print(f"'{nome_saida}' decifrado com sucesso.")
+    except Exception as e:
+        print("Erro ao decifrar:", e)
 
 def autenticar_ficheiro(nome_original, nome_saida):
     try:
-        _, _, chave_mac = gerar_chaves_e_guardar()
-
-        with open(nome_original, 'r') as f:
-            texto = f.read()
-
-        hmac = HMAC.new(chave_mac, digestmod=SHA256)
-        hmac.update(texto.encode())
-        mac = hmac.hexdigest()
-
-        with open(nome_saida, 'w') as f:
-            f.write(texto + "\n\n[MAC] " + mac)
-
-        print(f"Ficheiro autenticado guardado como '{nome_saida}'")
-        print("Apague o ficheiro 'keys-and-iv.txt' após uso!")
+        _, _, chave_mac = gerar_chaves_por_ficheiro(nome_saida + ".auth")
+        with open(nome_original, "rb") as f:
+            data = f.read()
+        h = HMAC.new(chave_mac, digestmod=SHA256)
+        h.update(data)
+        mac = h.hexdigest()
+        with open(nome_saida, "w") as f:
+            f.write(data.decode(errors="ignore") + "\n\n[MAC] " + mac)
+        print(f"'{nome_saida}' autenticado com sucesso. Chave MAC em '{nome_saida}.auth.key.txt'.")
     except Exception as e:
-        print(f"Erro ao autenticar ficheiro: {e}")
+        print("Erro ao autenticar:", e)
 
-#funçao p autenticar MAC
-def verificar_mac(nome_ficheiro, chave_mac):
+def verificar_mac(nome_ficheiro, auth_key_file):
     try:
-        with open(nome_ficheiro, 'r') as f:
-            conteudo = f.read().split('\n\n[MAC] ')
-
-            if len(conteudo) != 2:
-                return False, "Formato invalido, MAC nao encontrado"
-
-            texto, mac_armazenado = conteudo
-            hmac = HMAC.new(chave_mac, digestmod=SHA256)
-            hmac.update(texto.encode())
-            mac_calculado = hmac.hexdigest()
-
-            if mac_armazenado.strip() ==  mac_calculado:
-                return True, "MAC valido, integridade confirmada"
-            else:
-                return False, "MAC invalido. Ficheiro pode ter sido alterado"
-
+        _, _, chave_mac = ler_chaves_de_ficheiro(auth_key_file)
+        txt, mac_stored = open(nome_ficheiro, "r").read().split("\n\n[MAC] ")
     except Exception as e:
-        return False, f"Erro na verificaçao {e}"
-    
-#funçao para carregar chave MAC do ficheiro
-def carregar_chave_mac():
-    try:
-        with open("keys-and-iv.txt", "r") as f:
-            dados = json.load(f)
-            chave_mac = base64.b64decode(dados["key_mac"])
-            return chave_mac
-    except Exception as e:
-        print(f"Erro ao carregar chave MAC: {e}")
-        return None
+        print("Erro na verificação de MAC:", e)
+        return False
+    h = HMAC.new(chave_mac, digestmod=SHA256)
+    h.update(txt.encode())
+    if h.hexdigest() == mac_stored.strip():
+        print("MAC válido.")
+        return True
+    else:
+        print("MAC inválido.")
+        return False
 
-#funçao para guardar o ficheiro autenticado
-def guardar_se_autenticado(nome_entrada, nome_saida):
-    chave_mac = carregar_chave_mac()
-    if chave_mac is None:
-        print("Chave MAC não encontrada.")
-        return
-
-    valido, mensagem = verificar_mac(nome_entrada, chave_mac)
-    print(mensagem)
-
-    if valido:
+def guardar_se_autenticado(nome_entrada, nome_saida, auth_key_file):
+    if verificar_mac(nome_entrada, auth_key_file):
         try:
             shutil.copyfile(nome_entrada, nome_saida)
-            print("Ficheiro autenticado e guardado como '{nome_saida}'")
+            print("Ficheiro guardado com sucesso.")
         except Exception as e:
             print(f"Erro ao guardar ficheiro: {e}")
     else:
         print("Ficheiro NÃO autenticado. Guardar não é permitido.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
